@@ -1,0 +1,143 @@
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static("public"));
+
+let rooms = {};
+
+function createRoles(players) {
+    let roles = ["mafia", "doctor", "police"];
+    while (roles.length < players.length) roles.push("citizen");
+
+    return roles.sort(() => 0.5 - Math.random());
+}
+
+io.on("connection", (socket) => {
+
+    socket.on("joinRoom", ({name, room}) => {
+        socket.join(room);
+
+        if (!rooms[room]) {
+            rooms[room] = {
+                players: [],
+                phase: "waiting",
+                votes: {}
+            };
+        }
+
+        rooms[room].players.push({
+            id: socket.id,
+            name,
+            role: null,
+            alive: true
+        });
+
+        io.to(room).emit("updatePlayers", rooms[room].players);
+    });
+
+    socket.on("startGame", (room) => {
+        let roomData = rooms[room];
+        let roles = createRoles(roomData.players);
+
+        roomData.players.forEach((p, i) => {
+            p.role = roles[i];
+            io.to(p.id).emit("yourRole", p.role);
+        });
+
+        startNight(room);
+    });
+
+    function startNight(room) {
+        let r = rooms[room];
+        r.phase = "night";
+        r.actions = {};
+
+        io.to(room).emit("phase", "night");
+
+        setTimeout(() => resolveNight(room), 20000);
+    }
+
+    function resolveNight(room) {
+        let r = rooms[room];
+
+        let kill = r.actions.mafia;
+        let save = r.actions.doctor;
+
+        if (kill && kill !== save) {
+            let target = r.players.find(p => p.id === kill);
+            if (target) target.alive = false;
+        }
+
+        startDay(room);
+    }
+
+    function startDay(room) {
+        let r = rooms[room];
+        r.phase = "day";
+        r.votes = {};
+
+        io.to(room).emit("phase", "day");
+        io.to(room).emit("updatePlayers", r.players);
+
+        setTimeout(() => resolveVotes(room), 25000);
+    }
+
+    function resolveVotes(room) {
+        let r = rooms[room];
+
+        let counts = {};
+        Object.values(r.votes).forEach(v => {
+            counts[v] = (counts[v] || 0) + 1;
+        });
+
+        let max = 0, targetId = null;
+        for (let id in counts) {
+            if (counts[id] > max) {
+                max = counts[id];
+                targetId = id;
+            }
+        }
+
+        if (targetId) {
+            let player = r.players.find(p => p.id === targetId);
+            if (player) player.alive = false;
+        }
+
+        checkWin(room);
+        startNight(room);
+    }
+
+    function checkWin(room) {
+        let r = rooms[room];
+        let mafia = r.players.filter(p => p.role === "mafia" && p.alive);
+        let others = r.players.filter(p => p.role !== "mafia" && p.alive);
+
+        if (mafia.length === 0) {
+            io.to(room).emit("end", "المواطنون فازوا!");
+        } else if (mafia.length >= others.length) {
+            io.to(room).emit("end", "المافيا فازت!");
+        }
+    }
+
+    socket.on("action", ({room, role, target}) => {
+        let r = rooms[room];
+        if (!r.actions) r.actions = {};
+        r.actions[role] = target;
+    });
+
+    socket.on("vote", ({room, target}) => {
+        let r = rooms[room];
+        r.votes[socket.id] = target;
+    });
+
+    socket.on("chat", ({room, msg}) => {
+        io.to(room).emit("chat", msg);
+    });
+
+});
+server.listen(3000, () => console.log("Running..."));
