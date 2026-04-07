@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Mafia Online</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<h1>🎭 Mafia Online</h1>
+
+<div class="box">
+    <input id="name" placeholder="اسمك">
+    <input id="room" placeholder="اسم الغرفة">
+    <button onclick="join()">دخول</button>
+</div>
+
+<h2 id="role"></h2>
+<h3 id="phase"></h3>
+
+<div id="players"></div>
+
+<button onclick="start()">ابدأ اللعبة</button>
+
+<hr>
+
+<div id="chat"></div>
+
+<input id="msg" placeholder="اكتب رسالة">
+<button onclick="send()">ارسال</button>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="client.js"></script>
+
+</body>
+</html>
