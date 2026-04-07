@@ -1,0 +1,67 @@
+const socket = io();
+let room = "";
+let myRole = "";
+
+function join(){
+    const name = document.getElementById("name").value;
+    room = document.getElementById("room").value;
+
+    socket.emit("joinRoom", {name, room});
+}
+
+socket.on("updatePlayers", players => {
+    const div = document.getElementById("players");
+    div.innerHTML = "";
+
+    players.forEach(p => {
+        const el = document.createElement("div");
+
+        el.innerText = p.name + (p.alive ? "" : " ❌");
+
+        // التصويت في النهار
+        el.onclick = () => vote(p.id);
+
+        // اختيار هدف في الليل حسب الدور
+        el.ondblclick = () => action(p.id);
+
+        div.appendChild(el);
+    });
+});
+
+socket.on("yourRole", role => {
+    myRole = role;
+    document.getElementById("role").innerText = "🎭 دورك: " + role;
+});
+
+socket.on("phase", phase => {
+    document.getElementById("phase").innerText = "📌 المرحلة: " + phase;
+});
+
+function start(){
+    socket.emit("startGame", room);
+}
+
+// التصويت
+function vote(id){
+    socket.emit("vote", {room, target: id});
+}
+
+// أفعال الليل
+function action(id){
+    socket.emit("action", {
+        room,
+        role: myRole,
+        target: id
+    });
+}
+
+// الشات
+function send(){
+    const msg = document.getElementById("msg").value;
+    socket.emit("chat", {room, msg});
+}
+
+socket.on("chat", msg => {
+    const chat = document.getElementById("chat");
+    chat.innerHTML += msg + "<br>";
+});
